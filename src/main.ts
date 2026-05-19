@@ -79,7 +79,7 @@ function renderHomeScreen(): HTMLElement {
 
     /* ── MIDDLE SECTION: Folders ── */
     const middleSection = createElement("div", "folder-bar");
-    
+
     /* ── BOTTOM SECTION: app grid ── */
     const bottomSection = createElement("div", "home-section home-section--bottom");
     const grid = createElement("div", "app-grid");
