@@ -412,9 +412,9 @@ class AresApp {
         // Lander (skip drawing if crashed and explosion is playing)
         const lx = wx2sx(this.state.x);
         const ly = wy2sy(this.state.y);
-        // Scale factor so lander stays a readable size regardless of zoom
+        // Scale factor — lander scales naturally with zoom
         const pixPerMetre = H / spanY;
-        const s = Math.max(0.6, Math.min(1.4, pixPerMetre / 5));
+        const s = pixPerMetre / 4;
         if (!this.state.crashed) {
             ctx.save();
             ctx.translate(lx, ly);
