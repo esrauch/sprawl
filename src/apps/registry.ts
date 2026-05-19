@@ -9,7 +9,8 @@ import base from "./base/index.js";
 import contagion from "./contagion/index.js";
 import descend from "./descend/index.js";
 import golf from "./golf/index.js";
+import egg from "./egg/index.js";
 
 /** All registered apps, in launcher display order. */
-export const apps: AppDefinition[] = [pixscan, solitaire, datalog, sysconf, pong, ares, base, contagion, descend, golf];
+export const apps: AppDefinition[] = [pixscan, solitaire, datalog, sysconf, pong, ares, base, contagion, descend, golf, egg];
 
