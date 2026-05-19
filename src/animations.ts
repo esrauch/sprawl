@@ -35,11 +35,18 @@ export async function runSequence(steps: AnimationStep[]): Promise<void> {
     }
 }
 
+// ── Helper ─────────────────────────────────────────
+
+function getDuration(defaultMs: number): number {
+    const isAnimEnabled = localStorage.getItem("sprawl_animations") !== "false";
+    return isAnimEnabled ? defaultMs : 0;
+}
+
 // ── Primitives ─────────────────────────────────────
 
 /** Wait for a given number of milliseconds. */
 export function wait(ms: number): AnimationStep {
-    return () => new Promise((resolve) => setTimeout(resolve, ms));
+    return () => new Promise((resolve) => setTimeout(resolve, getDuration(ms)));
 }
 
 /**
@@ -53,9 +60,21 @@ export function typeText(
 ): AnimationStep {
     return () =>
         new Promise<void>((resolve) => {
-            let i = 0;
             const cursor = target.querySelector(".cmd-prompt__cursor");
+            const delay = getDuration(charDelayMs);
 
+            if (delay === 0) {
+                const textNode = document.createTextNode(text);
+                if (cursor) {
+                    target.insertBefore(textNode, cursor);
+                } else {
+                    target.appendChild(textNode);
+                }
+                resolve();
+                return;
+            }
+
+            let i = 0;
             function tick() {
                 if (i < text.length) {
                     const charNode = document.createTextNode(text[i]);
@@ -65,7 +84,7 @@ export function typeText(
                         target.appendChild(charNode);
                     }
                     i++;
-                    setTimeout(tick, charDelayMs);
+                    setTimeout(tick, delay);
                 } else {
                     resolve();
                 }
@@ -132,7 +151,9 @@ export function expandOverlay(
             overlay.className = "transition-wipe";
             overlay.style.top = `${startY}px`;
             overlay.style.height = "0";
-            overlay.style.transitionDuration = `${durationMs}ms`;
+            
+            const duration = getDuration(durationMs);
+            overlay.style.transitionDuration = `${duration}ms`;
             screen.appendChild(overlay);
 
             // Force layout recalc before triggering transition
@@ -143,7 +164,7 @@ export function expandOverlay(
             overlay.style.height = `${targetHeight}px`;
 
             // Resolve after the CSS transition completes
-            setTimeout(resolve, durationMs + 20);
+            setTimeout(resolve, duration + 20);
         });
 }
 
@@ -159,7 +180,9 @@ export function screenBlack(
             const blackout = document.createElement("div");
             blackout.className = "transition-blackout";
             screen.appendChild(blackout);
-            setTimeout(resolve, durationMs);
+            
+            const duration = getDuration(durationMs);
+            setTimeout(resolve, duration);
         });
 }
 
@@ -172,14 +195,19 @@ export function screenFlicker(
 ): AnimationStep {
     return () =>
         new Promise<void>((resolve) => {
-            let i = 0;
-            const flickerInterval = 80;
+            const duration = getDuration(80);
+            if (duration === 0) {
+                screen.style.opacity = "1";
+                resolve();
+                return;
+            }
 
+            let i = 0;
             function tick() {
                 if (i < count * 2) {
                     screen.style.opacity = i % 2 === 0 ? "0" : "1";
                     i++;
-                    setTimeout(tick, flickerInterval);
+                    setTimeout(tick, duration);
                 } else {
                     screen.style.opacity = "1";
                     resolve();

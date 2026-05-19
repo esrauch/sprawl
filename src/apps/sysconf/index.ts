@@ -5,16 +5,54 @@ class SysconfApp implements AppInstance {
     public onMount(api: AppApi) {
         const container = api.container;
 
-        const card = document.createElement("div");
-        card.className = "panel-card";
-        const subtitle = document.createElement("h2");
-        subtitle.textContent = "SYSTEM CONFIG";
-        const description = document.createElement("p");
-        description.textContent =
-            "Terminal mode: PORTRAIT. Render pipeline: ACTIVE. Access level: CREW. Kernel v2.4.1-stable.";
-        card.appendChild(subtitle);
-        card.appendChild(description);
-        container.appendChild(card);
+        // Settings Section
+        const settingsSection = document.createElement("div");
+        settingsSection.className = "panel-card";
+        settingsSection.style.marginTop = "0";
+        settingsSection.style.display = "flex";
+        settingsSection.style.flexDirection = "column";
+        settingsSection.style.gap = "1rem";
+
+        const sectionTitle = document.createElement("h3");
+        sectionTitle.textContent = "HARDWARE PARAMETERS";
+        sectionTitle.style.borderBottom = "1px solid var(--crt-border)";
+        sectionTitle.style.paddingBottom = "0.3rem";
+        sectionTitle.style.marginBottom = "0.5rem";
+        sectionTitle.style.fontSize = "0.9rem";
+        sectionTitle.style.letterSpacing = "0.1em";
+        settingsSection.appendChild(sectionTitle);
+
+        // Checkbox Label
+        const label = document.createElement("label");
+        label.className = "retro-checkbox";
+
+        const input = document.createElement("input");
+        input.type = "checkbox";
+        input.id = "animations-toggle";
+        
+        const isAnimEnabled = localStorage.getItem("sprawl_animations") !== "false";
+        input.checked = isAnimEnabled;
+
+        const box = document.createElement("span");
+        box.className = "retro-checkbox-box";
+
+        const text = document.createElement("span");
+        text.textContent = "GLOBAL EMULATION ANIMATIONS";
+        text.style.fontSize = "0.85rem";
+        text.style.letterSpacing = "0.08em";
+
+        label.appendChild(input);
+        label.appendChild(box);
+        label.appendChild(text);
+        settingsSection.appendChild(label);
+        
+        container.appendChild(settingsSection);
+
+        // Event listener
+        input.addEventListener("change", (e) => {
+            const target = e.target as HTMLInputElement;
+            localStorage.setItem("sprawl_animations", target.checked ? "true" : "false");
+        });
     }
 }
 

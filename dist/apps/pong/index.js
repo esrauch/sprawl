@@ -14,6 +14,8 @@ class Pong {
     constructor() {
         this.animationFrameId = 0;
         this.lastTime = 0;
+        this.scaleX = 1;
+        this.scaleY = 1;
         this.state = {
             running: false,
             playerScore: 0,
@@ -39,14 +41,41 @@ class Pong {
             this.state.playerMovingRight = true;
         };
         this.handleInputRelease = (e) => {
-            e.preventDefault();
             this.state.playerMovingLeft = false;
             this.state.playerMovingRight = false;
         };
         this.renderFrame = () => {
-            this.ballEl.style.transform = `translate(${this.state.ballX}px, ${this.state.ballY}px)`;
-            this.playerPaddleEl.style.transform = `translateX(${this.state.playerX}px)`;
-            this.aiPaddleEl.style.transform = `translateX(${this.state.aiX}px)`;
+            if (!this.ctx)
+                return;
+            const dprWidth = this.canvasEl.width;
+            const dprHeight = this.canvasEl.height;
+            this.ctx.clearRect(0, 0, dprWidth, dprHeight);
+            const dpr = window.devicePixelRatio || 1;
+            // Phosphor style Fill & Glow
+            this.ctx.fillStyle = "#33ff66";
+            this.ctx.shadowColor = "rgba(51, 255, 102, 0.4)";
+            this.ctx.shadowBlur = 8 * dpr;
+            // Player Paddle
+            const px = this.state.playerX * this.scaleX;
+            const py = (GAME_HEIGHT - PADDLE_HEIGHT - 10) * this.scaleY;
+            const pw = this.state.playerWidth * this.scaleX;
+            const ph = PADDLE_HEIGHT * this.scaleY;
+            this.ctx.fillRect(px, py, pw, ph);
+            // AI Paddle
+            const ax = this.state.aiX * this.scaleX;
+            const ay = 10 * this.scaleY;
+            const aw = this.state.aiWidth * this.scaleX;
+            const ah = PADDLE_HEIGHT * this.scaleY;
+            this.ctx.fillRect(ax, ay, aw, ah);
+            // Ball (Circle)
+            const bx = (this.state.ballX + BALL_SIZE / 2) * this.scaleX;
+            const by = (this.state.ballY + BALL_SIZE / 2) * this.scaleY;
+            const radius = (BALL_SIZE / 2) * this.scaleX;
+            this.ctx.beginPath();
+            this.ctx.arc(bx, by, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            // Reset shadow properties to avoid affecting overlays/text
+            this.ctx.shadowBlur = 0;
         };
     }
     onMount(api) {
@@ -61,17 +90,14 @@ class Pong {
         this.arena.style.width = "100%";
         this.arena.style.maxWidth = "400px";
         this.arena.style.aspectRatio = "3/4";
-        this.ballEl = document.createElement("div");
-        this.ballEl.className = "pong-ball";
-        this.playerPaddleEl = document.createElement("div");
-        this.playerPaddleEl.className = "pong-paddle pong-paddle--player";
-        this.aiPaddleEl = document.createElement("div");
-        this.aiPaddleEl.className = "pong-paddle pong-paddle--ai";
+        this.canvasEl = document.createElement("canvas");
+        this.canvasEl.style.width = "100%";
+        this.canvasEl.style.height = "100%";
+        this.canvasEl.style.display = "block";
+        this.ctx = this.canvasEl.getContext("2d");
         this.overlayEl = document.createElement("div");
         this.overlayEl.className = "pong-overlay";
-        this.arena.appendChild(this.aiPaddleEl);
-        this.arena.appendChild(this.ballEl);
-        this.arena.appendChild(this.playerPaddleEl);
+        this.arena.appendChild(this.canvasEl);
         this.arena.appendChild(this.overlayEl);
         const controls = document.createElement("div");
         controls.className = "pong-controls";
@@ -97,21 +123,11 @@ class Pong {
         this.resizeObserver = new ResizeObserver((entries) => {
             for (const entry of entries) {
                 const rect = entry.contentRect;
-                const scaleX = rect.width / GAME_WIDTH;
-                const scaleY = rect.height / GAME_HEIGHT;
-                this.ballEl.style.width = `${BALL_SIZE * scaleX}px`;
-                this.ballEl.style.height = `${BALL_SIZE * scaleY}px`;
-                this.playerPaddleEl.style.height = `${PADDLE_HEIGHT * scaleY}px`;
-                this.playerPaddleEl.style.bottom = `${10 * scaleY}px`;
-                this.aiPaddleEl.style.height = `${PADDLE_HEIGHT * scaleY}px`;
-                this.aiPaddleEl.style.top = `${10 * scaleY}px`;
-                this.renderFrame = () => {
-                    this.ballEl.style.transform = `translate(${this.state.ballX * scaleX}px, ${this.state.ballY * scaleY}px)`;
-                    this.playerPaddleEl.style.transform = `translateX(${this.state.playerX * scaleX}px)`;
-                    this.playerPaddleEl.style.width = `${this.state.playerWidth * scaleX}px`;
-                    this.aiPaddleEl.style.transform = `translateX(${this.state.aiX * scaleX}px)`;
-                    this.aiPaddleEl.style.width = `${this.state.aiWidth * scaleX}px`;
-                };
+                const dpr = window.devicePixelRatio || 1;
+                this.canvasEl.width = rect.width * dpr;
+                this.canvasEl.height = rect.height * dpr;
+                this.scaleX = (rect.width / GAME_WIDTH) * dpr;
+                this.scaleY = (rect.height / GAME_HEIGHT) * dpr;
                 this.renderFrame();
             }
         });

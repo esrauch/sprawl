@@ -280,7 +280,8 @@ body {
     font-weight: 400;
     letter-spacing: 0.25em;
     text-transform: uppercase;
-    color: var(--phosphor);
+    color: var(--amber);
+    text-shadow: 0 0 4px var(--amber-glow);
 }
 
 @keyframes cursor-blink {
@@ -741,6 +742,66 @@ body {
     letter-spacing: 0.08em;
     text-transform: uppercase;
     padding: 0.1rem 0;
+}
+
+/* ═══════════════════════════════════════════
+   RETRO CHECKBOX STYLING
+   ═══════════════════════════════════════════ */
+
+.retro-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    font-family: var(--font-mono);
+    color: var(--phosphor);
+    user-select: none;
+    font-size: 0.95rem;
+}
+
+.retro-checkbox input {
+    position: absolute;
+    opacity: 0;
+    cursor: pointer;
+    height: 0;
+    width: 0;
+}
+
+.retro-checkbox-box {
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--phosphor-dim);
+    background: var(--crt-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease-in-out;
+    box-shadow: inset 0 0 5px rgba(51, 255, 102, 0.1);
+}
+
+.retro-checkbox:hover .retro-checkbox-box {
+    border-color: var(--phosphor);
+    box-shadow: 0 0 8px var(--phosphor-glow), inset 0 0 8px rgba(51, 255, 102, 0.2);
+}
+
+.retro-checkbox input:checked ~ .retro-checkbox-box {
+    border-color: var(--phosphor);
+    box-shadow: 0 0 10px var(--phosphor-glow);
+}
+
+.retro-checkbox-box::after {
+    content: "";
+    display: none;
+    font-family: var(--font-mono);
+    font-weight: bold;
+    font-size: 1rem;
+    color: var(--phosphor-bright);
+    text-shadow: 0 0 5px var(--phosphor-glow);
+}
+
+.retro-checkbox input:checked ~ .retro-checkbox-box::after {
+    content: "X";
+    display: block;
 }
 
 /* ═══════════════════════════════════════════
