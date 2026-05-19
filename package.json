@@ -1,0 +1,13 @@
+{
+    "name": "sprawl-webapp",
+    "version": "0.1.0",
+    "private": true,
+    "scripts": {
+        "build": "tsc",
+        "watch": "tsc --watch",
+        "start": "npm run build"
+    },
+    "devDependencies": {
+        "typescript": "^5.5.0"
+    }
+}
