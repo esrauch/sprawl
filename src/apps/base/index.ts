@@ -44,6 +44,19 @@ interface Train {
 
 interface Line {
     stationIds: number[];
+    colorIdx: number;
+}
+
+interface GhostTrain {
+    x: number;
+    y: number;
+    destX: number;
+    destY: number;
+    passengers: Shape[];
+    t: number;
+    speed: number;
+    color: string;
+    destStationId: number;
 }
 
 // ── Main app ─────────────────────────────────────────────────
@@ -61,6 +74,7 @@ class BaseApp implements AppInstance {
     private stations: Station[] = [];
     private lines: Line[] = [];
     private trains: Train[] = [];
+    private ghostTrains: GhostTrain[] = [];
     private nextStationId = 0;
     private gameOver = false;
     private score = 0;
@@ -70,8 +84,7 @@ class BaseApp implements AppInstance {
 
     // Interaction state
     private selectedStationId: number | null = null;
-    // activeLineIdx: which line the user is extending. -1 = "new line" mode, null = auto.
-    private activeLineIdx: number | null = null;
+    private activeLineIdx: number = 0;
 
     // Canvas dimensions (CSS px)
     private W = 0;
@@ -122,7 +135,7 @@ class BaseApp implements AppInstance {
         const h2 = document.createElement("h2");
         h2.textContent = "BASE TRANSIT NETWORK";
         const p = document.createElement("p");
-        p.textContent = "Select a line below, then tap stations to connect. Tap [+] for a new line.";
+        p.textContent = "Select a line below, then tap stations to connect. Get the shapes to their destinations.";
         card.appendChild(h2);
         card.appendChild(p);
         this.container.appendChild(card);
@@ -161,46 +174,84 @@ class BaseApp implements AppInstance {
         if (!this.toolbarEl) return;
         this.toolbarEl.innerHTML = "";
 
-        // One button per existing line
+        // Buttons for all 5 lines
         for (let li = 0; li < this.lines.length; li++) {
             const btn = document.createElement("button");
             btn.type = "button";
             btn.className = "btn-action";
-            const colour = LINE_COLOURS[li % LINE_COLOURS.length];
+            const colour = LINE_COLOURS[this.lines[li].colorIdx % LINE_COLOURS.length];
             btn.style.cssText =
                 `min-width:2.2rem;padding:0.25rem 0.5rem;font-size:0.7rem;` +
-                `border-color:${colour};color:${colour}`;
+                `border-color:${colour};color:${colour};`;
+
+            if (this.lines[li].stationIds.length === 0) {
+                btn.style.opacity = "0.5";
+            }
+
             btn.textContent = `L${li + 1}`;
             if (this.activeLineIdx === li) {
                 btn.style.background = colour;
                 btn.style.color = "#020805";
+                btn.style.opacity = "1";
             }
             const idx = li;
             btn.addEventListener("click", () => {
-                this.activeLineIdx = this.activeLineIdx === idx ? null : idx;
+                this.activeLineIdx = idx;
                 this.selectedStationId = null;
                 this.rebuildToolbar();
             });
             this.toolbarEl.appendChild(btn);
         }
 
-        // "+ NEW" button
-        if (this.lines.length < MAX_LINES) {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = "btn-action";
-            btn.style.cssText = "min-width:2.2rem;padding:0.25rem 0.5rem;font-size:0.7rem";
-            btn.textContent = "+";
-            if (this.activeLineIdx === -1) {
-                btn.style.background = "#33ff66";
-                btn.style.color = "#020805";
+        // Delete button for active line, only if it has tracks
+        if (this.activeLineIdx >= 0 && this.activeLineIdx < this.lines.length) {
+            const line = this.lines[this.activeLineIdx];
+            if (line.stationIds.length > 0) {
+                const btnDel = document.createElement("button");
+                btnDel.type = "button";
+                btnDel.className = "btn-action";
+                btnDel.style.cssText = "min-width:2.2rem;padding:0.25rem 0.5rem;font-size:0.7rem;border-color:#ff3333;color:#ff3333;margin-left:auto;";
+                btnDel.textContent = "DEL";
+                btnDel.addEventListener("click", () => {
+                    const idx = this.activeLineIdx;
+                    const line = this.lines[idx];
+                    
+                    // Convert trains to ghost trains so they finish their journey
+                    for (const tr of this.trains) {
+                        if (tr.lineIdx === idx) {
+                            const toIdx = tr.forward ? tr.segIdx + 1 : tr.segIdx;
+                            if (toIdx >= 0 && toIdx < line.stationIds.length) {
+                                const stId = line.stationIds[toIdx];
+                                const st = this.stationById(stId);
+                                const pos = this.getTrainPos(tr);
+                                if (st && pos && tr.passengers.length > 0) {
+                                    const fx = pos.x / this.W;
+                                    const fy = pos.y / this.H;
+                                    const d = dist(fx * this.W, fy * this.H, st.x * this.W, st.y * this.H);
+                                    
+                                    this.ghostTrains.push({
+                                        x: fx,
+                                        y: fy,
+                                        destX: st.x,
+                                        destY: st.y,
+                                        passengers: tr.passengers,
+                                        t: 0,
+                                        speed: d > 0 ? (TRAIN_SPEED / d) : 1,
+                                        color: LINE_COLOURS[line.colorIdx % LINE_COLOURS.length],
+                                        destStationId: stId
+                                    });
+                                }
+                            }
+                        }
+                    }
+
+                    this.lines[idx].stationIds = [];
+                    this.trains = this.trains.filter(tr => tr.lineIdx !== idx);
+                    this.selectedStationId = null;
+                    this.rebuildToolbar();
+                });
+                this.toolbarEl.appendChild(btnDel);
             }
-            btn.addEventListener("click", () => {
-                this.activeLineIdx = this.activeLineIdx === -1 ? null : -1;
-                this.selectedStationId = null;
-                this.rebuildToolbar();
-            });
-            this.toolbarEl.appendChild(btn);
         }
     }
 
@@ -208,7 +259,11 @@ class BaseApp implements AppInstance {
     private initGame() {
         this.stations = [];
         this.lines = [];
+        for (let i = 0; i < MAX_LINES; i++) {
+            this.lines.push({ stationIds: [], colorIdx: i });
+        }
         this.trains = [];
+        this.ghostTrains = [];
         this.nextStationId = 0;
         this.gameOver = false;
         this.score = 0;
@@ -216,7 +271,7 @@ class BaseApp implements AppInstance {
         this.passengerTimer = 0;
         this.stationTimer = 0;
         this.selectedStationId = null;
-        this.activeLineIdx = null;
+        this.activeLineIdx = 0;
 
         this.addStation(0.25, 0.3, "circle");
         this.addStation(0.7, 0.25, "triangle");
@@ -310,74 +365,58 @@ class BaseApp implements AppInstance {
             }
         }
 
-        // Mode: force new line
-        if (this.activeLineIdx === -1) {
-            if (this.lines.length >= MAX_LINES) return;
-            this.createNewLine(aId, bId);
-            this.activeLineIdx = this.lines.length - 1;
-            this.rebuildToolbar();
-            return;
-        }
-
-        // Mode: extend a specific line
-        if (this.activeLineIdx !== null && this.activeLineIdx >= 0) {
+        // Extend or create active line
+        if (this.activeLineIdx >= 0 && this.activeLineIdx < this.lines.length) {
             const line = this.lines[this.activeLineIdx];
-            if (line) {
-                if (this.tryExtendLine(this.activeLineIdx, line, aId, bId)) {
-                    this.rebuildToolbar();
-                    return;
-                }
-            }
-        }
 
-        // Mode: auto — try extending any line, fall back to new
-        for (let li = 0; li < this.lines.length; li++) {
-            if (this.tryExtendLine(li, this.lines[li], aId, bId)) {
+            // If the line has no stations, create the first segment
+            if (line.stationIds.length === 0) {
+                line.stationIds = [aId, bId];
+                const newTr: Train = {
+                    lineIdx: this.activeLineIdx,
+                    segIdx: 0,
+                    t: 0,
+                    forward: true,
+                    passengers: [],
+                };
+                this.trains.push(newTr);
+                this.trainAtStation(newTr, aId);
                 this.rebuildToolbar();
                 return;
             }
-        }
 
-        // Fall back to new line
-        if (this.lines.length < MAX_LINES) {
-            this.createNewLine(aId, bId);
-            this.rebuildToolbar();
+            // Otherwise try extending it
+            if (this.tryExtendLine(this.activeLineIdx, line, aId, bId)) {
+                this.rebuildToolbar();
+                return;
+            }
         }
     }
 
     private tryExtendLine(li: number, line: Line, aId: number, bId: number): boolean {
         const ids = line.stationIds;
-        if (ids[ids.length - 1] === aId && !ids.includes(bId)) {
+        const isCircular = ids.length > 2 && ids[0] === ids[ids.length - 1];
+        if (isCircular) return false;
+
+        if (ids[ids.length - 1] === aId && (!ids.includes(bId) || (ids.length >= 2 && bId === ids[0]))) {
             ids.push(bId);
             return true;
         }
-        if (ids[ids.length - 1] === bId && !ids.includes(aId)) {
+        if (ids[ids.length - 1] === bId && (!ids.includes(aId) || (ids.length >= 2 && aId === ids[0]))) {
             ids.push(aId);
             return true;
         }
-        if (ids[0] === aId && !ids.includes(bId)) {
+        if (ids[0] === aId && (!ids.includes(bId) || (ids.length >= 2 && bId === ids[ids.length - 1]))) {
             ids.unshift(bId);
             this.shiftTrainIndices(li, 1);
             return true;
         }
-        if (ids[0] === bId && !ids.includes(aId)) {
+        if (ids[0] === bId && (!ids.includes(aId) || (ids.length >= 2 && aId === ids[ids.length - 1]))) {
             ids.unshift(aId);
             this.shiftTrainIndices(li, 1);
             return true;
         }
         return false;
-    }
-
-    private createNewLine(aId: number, bId: number) {
-        const newIdx = this.lines.length;
-        this.lines.push({ stationIds: [aId, bId] });
-        this.trains.push({
-            lineIdx: newIdx,
-            segIdx: 0,
-            t: 0,
-            forward: true,
-            passengers: [],
-        });
     }
 
     private shiftTrainIndices(lineIdx: number, delta: number) {
@@ -398,6 +437,7 @@ class BaseApp implements AppInstance {
             this.elapsed += dt;
             this.updateSpawns(dt);
             this.updateTrains(dt);
+            this.updateGhostTrains(dt);
             this.checkOverflow(dt);
         }
 
@@ -462,27 +502,36 @@ class BaseApp implements AppInstance {
 
             if (tr.t >= 1) {
                 tr.t = 0;
-                // Arrived at destination station
-                this.trainAtStation(tr, line.stationIds[toIdx]);
 
-                // Advance to next segment or reverse
+                const stationId = line.stationIds[toIdx];
+
+                // Advance to next segment or reverse BEFORE boarding
                 if (tr.forward) {
                     if (tr.segIdx + 1 >= line.stationIds.length - 1) {
-                        // Reached the last station — reverse
-                        tr.forward = false;
-                        // segIdx stays the same; backward traverses segIdx+1 → segIdx
+                        const isCircular = line.stationIds[0] === line.stationIds[line.stationIds.length - 1];
+                        if (isCircular) {
+                            tr.segIdx = 0;
+                        } else {
+                            tr.forward = false;
+                        }
                     } else {
                         tr.segIdx++;
                     }
                 } else {
                     if (tr.segIdx <= 0) {
-                        // Reached the first station — reverse
-                        tr.forward = true;
-                        // segIdx stays at 0; forward traverses 0 → 1
+                        const isCircular = line.stationIds[0] === line.stationIds[line.stationIds.length - 1];
+                        if (isCircular) {
+                            tr.segIdx = line.stationIds.length - 2;
+                        } else {
+                            tr.forward = true;
+                        }
                     } else {
                         tr.segIdx--;
                     }
                 }
+
+                // Now that the train's future direction is set, process boarding
+                this.trainAtStation(tr, stationId);
             }
         }
     }
@@ -503,12 +552,63 @@ class BaseApp implements AppInstance {
         tr.passengers = remaining;
 
         // Pick up waiting passengers (up to capacity)
-        while (station.passengers.length > 0 && tr.passengers.length < TRAIN_CAPACITY) {
-            tr.passengers.push(station.passengers.shift()!);
+        const line = this.lines[tr.lineIdx];
+        if (!line) return;
+        const isCircular = line.stationIds.length > 2 && line.stationIds[0] === line.stationIds[line.stationIds.length - 1];
+
+        // Determine which shapes the train will visit in its CURRENT direction
+        const upcomingShapes = new Set<Shape>();
+
+        if (isCircular) {
+            for (const id of line.stationIds) {
+                const s = this.stationById(id);
+                if (s) upcomingShapes.add(s.shape);
+            }
+        } else {
+            if (tr.forward) {
+                // Train is travelling from segIdx to segIdx + 1, so it will visit segIdx + 1 through end
+                for (let j = tr.segIdx + 1; j < line.stationIds.length; j++) {
+                    const s = this.stationById(line.stationIds[j]);
+                    if (s) upcomingShapes.add(s.shape);
+                }
+            } else {
+                // Train is travelling from segIdx + 1 to segIdx, so it will visit segIdx down to 0
+                for (let j = tr.segIdx; j >= 0; j--) {
+                    const s = this.stationById(line.stationIds[j]);
+                    if (s) upcomingShapes.add(s.shape);
+                }
+            }
+        }
+
+        let i = 0;
+        while (i < station.passengers.length && tr.passengers.length < TRAIN_CAPACITY) {
+            if (upcomingShapes.has(station.passengers[i])) {
+                tr.passengers.push(station.passengers.splice(i, 1)[0]!);
+            } else {
+                i++;
+            }
         }
     }
 
     // ── Overflow check ───────────────────────────────────────
+    private updateGhostTrains(dt: number) {
+        for (let i = this.ghostTrains.length - 1; i >= 0; i--) {
+            const gt = this.ghostTrains[i];
+            gt.t += gt.speed * dt;
+            if (gt.t >= 1) {
+                // Arrived
+                const st = this.stationById(gt.destStationId);
+                if (st) {
+                    for (const p of gt.passengers) {
+                        if (p === st.shape) this.score++;
+                        else st.passengers.push(p);
+                    }
+                }
+                this.ghostTrains.splice(i, 1);
+            }
+        }
+    }
+
     private checkOverflow(dt: number) {
         for (const s of this.stations) {
             if (s.passengers.length >= MAX_PASSENGERS) {
@@ -536,7 +636,7 @@ class BaseApp implements AppInstance {
         // Draw lines
         for (let li = 0; li < this.lines.length; li++) {
             const line = this.lines[li];
-            const colour = LINE_COLOURS[li % LINE_COLOURS.length];
+            const colour = LINE_COLOURS[line.colorIdx % LINE_COLOURS.length];
             ctx.strokeStyle = colour;
             ctx.lineWidth = 3;
             ctx.globalAlpha = this.activeLineIdx === li ? 0.8 : 0.35;
@@ -599,15 +699,44 @@ class BaseApp implements AppInstance {
         for (const tr of this.trains) {
             const pos = this.getTrainPos(tr);
             if (!pos) continue;
-            const colour = LINE_COLOURS[tr.lineIdx % LINE_COLOURS.length];
+            const colour = LINE_COLOURS[this.lines[tr.lineIdx].colorIdx % LINE_COLOURS.length];
+
+            ctx.save();
+            ctx.translate(pos.x, pos.y);
+            ctx.rotate(pos.angle);
 
             ctx.fillStyle = colour;
-            ctx.fillRect(pos.x - 4, pos.y - 3, 8, 6);
+            ctx.fillRect(-14, -8, 28, 16);
 
             for (let i = 0; i < tr.passengers.length; i++) {
-                ctx.fillStyle = "#020805";
-                ctx.fillRect(pos.x - 3 + i * 3, pos.y - 1, 2, 2);
+                const px = -9 + i * 6;
+                const py = 0;
+                this.drawShape(ctx, px, py, tr.passengers[i], 2.2, "#020805", true);
             }
+            ctx.restore();
+        }
+
+        // Draw ghost trains
+        for (const gt of this.ghostTrains) {
+            const cx = (gt.x + (gt.destX - gt.x) * gt.t) * W;
+            const cy = (gt.y + (gt.destY - gt.y) * gt.t) * H;
+            const angle = Math.atan2(gt.destY - gt.y, gt.destX - gt.x);
+
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.rotate(angle);
+
+            ctx.fillStyle = gt.color;
+            ctx.globalAlpha = 0.4;
+            ctx.fillRect(-14, -8, 28, 16);
+            ctx.globalAlpha = 1.0;
+
+            for (let i = 0; i < gt.passengers.length; i++) {
+                const px = -9 + i * 6;
+                const py = 0;
+                this.drawShape(ctx, px, py, gt.passengers[i], 2.2, "#020805", true);
+            }
+            ctx.restore();
         }
 
         // HUD
@@ -676,7 +805,7 @@ class BaseApp implements AppInstance {
     }
 
     // ── Train position helper ────────────────────────────────
-    private getTrainPos(tr: Train): { x: number; y: number } | null {
+    private getTrainPos(tr: Train): { x: number; y: number; angle: number } | null {
         const line = this.lines[tr.lineIdx];
         if (!line || line.stationIds.length < 2) return null;
 
@@ -689,9 +818,15 @@ class BaseApp implements AppInstance {
         const to = this.stationById(line.stationIds[toIdx]);
         if (!from || !to) return null;
 
+        const fx = from.x * this.W;
+        const fy = from.y * this.H;
+        const tx = to.x * this.W;
+        const ty = to.y * this.H;
+
         return {
-            x: (from.x + (to.x - from.x) * tr.t) * this.W,
-            y: (from.y + (to.y - from.y) * tr.t) * this.H,
+            x: fx + (tx - fx) * tr.t,
+            y: fy + (ty - fy) * tr.t,
+            angle: Math.atan2(ty - fy, tx - fx),
         };
     }
 }
