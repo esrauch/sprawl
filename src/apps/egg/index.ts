@@ -1,5 +1,10 @@
 import type { AppApi, AppDefinition, AppInstance } from "../../apps_api/types.js";
 import { AppFolder } from "../../apps_api/types.js";
+import {
+    MOONLIGHT_SONATA_CATCH_TIMES,
+    MOONLIGHT_SONATA_INFO,
+    MOONLIGHT_SONATA_MIDI_BASE64,
+} from "./moonlight-song.js";
 
 // ── Constants ───────────────────────────────────────────────
 const LOGICAL_WIDTH = 1000;
@@ -48,14 +53,23 @@ class EggApp implements AppInstance {
     private cartX = LOGICAL_WIDTH / 2;
     private score = 0;
     private lives = 3;
-    
+
+    // Song sync
+    private songAudio: HTMLAudioElement | null = null;
+    private songHasStarted = false;
+    private songTime = 0;
+    private songSpawnIndex = 0;
+    private songSpawnTimes: number[] = [];
+    private songSpeed = 500;
+
     // Timing
     private lastTime = 0;
     private spawnTimer = 0;
     private shatterPauseTimer = 0;
-    
+
     // Input
     private keys: Record<string, boolean> = {};
+    private statusLabel: HTMLDivElement | null = null;
 
     // Bound handlers
     private handleKeyDown = (e: KeyboardEvent) => this.onKeyDown(e);
@@ -65,6 +79,7 @@ class EggApp implements AppInstance {
     public onMount(api: AppApi) {
         this.container = api.container;
         this.buildUI();
+        this.setupSongAudio();
         this.initGame();
 
         this.resizeObserver = new ResizeObserver((entries) => {
@@ -83,13 +98,15 @@ class EggApp implements AppInstance {
         this.animationFrame = undefined;
         this.resizeObserver?.disconnect();
         this.resizeObserver = null;
-        
+
         window.removeEventListener("keydown", this.handleKeyDown);
         window.removeEventListener("keyup", this.handleKeyUp);
-        
-        if (this.container) this.container.innerHTML = "";
-        this.container = null;
-        this.canvas = null;
+
+        if (this.songAudio) {
+            this.songAudio.pause();
+            this.songAudio = null;
+        }
+
         this.ctx = null;
     }
 
@@ -107,24 +124,24 @@ class EggApp implements AppInstance {
             "width:100%;height:100%;display:block;background:#010401;" +
             "border:1px solid rgba(51,255,102,0.15);border-radius:0.25rem;" +
             "touch-action:none;";
-        
+
         window.addEventListener("keydown", this.handleKeyDown);
         window.addEventListener("keyup", this.handleKeyUp);
-        
+
         wrap.appendChild(cvs);
         this.container.appendChild(wrap);
-        
+
         const controls = document.createElement("div");
         controls.className = "pong-controls";
-        
+
         const leftBtn = document.createElement("button");
         leftBtn.className = "pong-btn";
         leftBtn.textContent = "<";
-        
+
         const rightBtn = document.createElement("button");
         rightBtn.className = "pong-btn";
         rightBtn.textContent = ">";
-        
+
         const setKey = (key: string, val: boolean) => {
             this.keys[key] = val;
             if (this.state === "GAMEOVER" && val) this.initGame();
@@ -133,13 +150,28 @@ class EggApp implements AppInstance {
         leftBtn.addEventListener("pointerdown", () => setKey("ArrowLeft", true));
         leftBtn.addEventListener("pointerup", () => setKey("ArrowLeft", false));
         leftBtn.addEventListener("pointerleave", () => setKey("ArrowLeft", false));
-        
+
         rightBtn.addEventListener("pointerdown", () => setKey("ArrowRight", true));
         rightBtn.addEventListener("pointerup", () => setKey("ArrowRight", false));
         rightBtn.addEventListener("pointerleave", () => setKey("ArrowRight", false));
 
         controls.appendChild(leftBtn);
         controls.appendChild(rightBtn);
+
+        const playBtn = document.createElement("button");
+        playBtn.className = "pong-btn";
+        playBtn.textContent = "PLAY";
+        playBtn.addEventListener("click", () => {
+            void this.startSongPlayback();
+        });
+        controls.appendChild(playBtn);
+
+        const status = document.createElement("div");
+        status.style.cssText = "margin-top:0.5rem;color:#33ff66;font-size:0.78rem;line-height:1.4;";
+        status.textContent = "Moonlight Sonata ready.";
+        controls.appendChild(status);
+        this.statusLabel = status;
+
         this.container.appendChild(controls);
 
         this.wrapper = wrap;
@@ -157,6 +189,7 @@ class EggApp implements AppInstance {
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         this.scale = this.W / LOGICAL_WIDTH;
         this.logicalH = this.H / this.scale;
+        this.computeSongSpawnTimes();
     }
 
     // ── Game Logic ───────────────────────────────────────────
@@ -169,6 +202,86 @@ class EggApp implements AppInstance {
         this.score = 0;
         this.lives = 3;
         this.spawnTimer = 0;
+        this.songTime = 0;
+        this.songSpawnIndex = 0;
+        this.songHasStarted = false;
+        if (this.songAudio) {
+            this.songAudio.currentTime = 0;
+            this.songAudio.pause();
+        }
+        this.computeSongSpawnTimes();
+        this.updateStatusLabel();
+    }
+
+    private setupSongAudio() {
+        if (typeof Audio === "undefined") return;
+        const audio = new Audio();
+        audio.src = `data:audio/midi;base64,${MOONLIGHT_SONATA_MIDI_BASE64}`;
+        audio.preload = "auto";
+        audio.loop = false;
+        audio.volume = 0.7;
+        audio.addEventListener("ended", () => {
+            this.songHasStarted = false;
+            this.updateStatusLabel();
+        });
+        this.songAudio = audio;
+        this.updateStatusLabel();
+    }
+
+    private updateStatusLabel() {
+        if (!this.statusLabel) return;
+        if (!this.songAudio) {
+            this.statusLabel.textContent = "Moonlight song unavailable.";
+            return;
+        }
+
+        if (!this.songHasStarted) {
+            this.statusLabel.textContent = "Press PLAY to start Moonlight Sonata.";
+        } else if (this.songAudio.paused) {
+            this.statusLabel.textContent = "Song paused. Press PLAY to resume sync.";
+        } else {
+            this.statusLabel.textContent = `Moonlight Sonata playing — ${this.songAudio.currentTime.toFixed(1)}s`;
+        }
+    }
+
+    private async startSongPlayback() {
+        if (!this.songAudio) return;
+        if (this.state !== "PLAYING") {
+            this.initGame();
+        }
+        this.songHasStarted = true;
+        this.songSpawnIndex = 0;
+        this.songTime = 0;
+        this.songAudio.currentTime = 0;
+        try {
+            await this.songAudio.play();
+        } catch {
+            // Play attempt may be blocked until user interacts with the page;
+            // an explicit click on PLAY should allow audio playback.
+        }
+        this.updateStatusLabel();
+    }
+
+    private computeSongSpawnTimes() {
+        if (this.logicalH <= 0) {
+            this.songSpawnTimes = [];
+            return;
+        }
+
+        const cartY = this.logicalH - 40;
+        const travelTime = (cartY + EGG_RADIUS) / this.songSpeed;
+        this.songSpawnTimes = MOONLIGHT_SONATA_CATCH_TIMES
+            .map((time) => MOONLIGHT_SONATA_INFO.trackOffset + time - travelTime)
+            .filter((time) => time >= 0);
+        this.songSpawnIndex = 0;
+    }
+
+    private spawnTimedEgg() {
+        this.eggs.push({
+            x: EGG_RADIUS + Math.random() * (LOGICAL_WIDTH - EGG_RADIUS * 2),
+            y: -EGG_RADIUS,
+            speed: this.songSpeed,
+        });
     }
 
     // ── Input ────────────────────────────────────────────────
@@ -187,7 +300,7 @@ class EggApp implements AppInstance {
     // ── Tick ─────────────────────────────────────────────────
     private tick(now: number) {
         if (!this.ctx) return;
-        
+
         let dt = (now - this.lastTime) / 1000;
         if (dt > 0.1) dt = 0.016; // limit dt on massive drops
         this.lastTime = now;
@@ -213,26 +326,34 @@ class EggApp implements AppInstance {
             }
         }
 
+        this.updateStatusLabel();
         this.draw();
         this.animationFrame = requestAnimationFrame((t) => this.tick(t));
     }
 
     private updatePlaying(dt: number) {
         const cartY = this.logicalH - 40;
-        
-        // Spawn eggs
-        this.spawnTimer -= dt;
-        if (this.spawnTimer <= 0) {
-            // Difficulty curve
-            const spawnInterval = Math.max(0.2, 1.5 - (this.score * 0.02));
-            this.spawnTimer = spawnInterval;
-            
-            const speed = Math.min(1000, 300 + (this.score * 10));
-            this.eggs.push({
-                x: EGG_RADIUS + Math.random() * (LOGICAL_WIDTH - EGG_RADIUS * 2),
-                y: -EGG_RADIUS,
-                speed
-            });
+
+        if (this.songAudio && this.songHasStarted && !this.songAudio.paused) {
+            this.songTime = this.songAudio.currentTime;
+            while (this.songSpawnIndex < this.songSpawnTimes.length && this.songTime >= this.songSpawnTimes[this.songSpawnIndex]) {
+                this.spawnTimedEgg();
+                this.songSpawnIndex++;
+            }
+        } else {
+            this.spawnTimer -= dt;
+            if (this.spawnTimer <= 0) {
+                // Difficulty curve for fallback mode
+                const spawnInterval = Math.max(0.2, 1.5 - (this.score * 0.02));
+                this.spawnTimer = spawnInterval;
+
+                const speed = Math.min(1000, 300 + (this.score * 10));
+                this.eggs.push({
+                    x: EGG_RADIUS + Math.random() * (LOGICAL_WIDTH - EGG_RADIUS * 2),
+                    y: -EGG_RADIUS,
+                    speed
+                });
+            }
         }
 
         // Move eggs
@@ -301,9 +422,11 @@ class EggApp implements AppInstance {
         ctx.font = "0.85rem var(--font-mono)";
         ctx.textAlign = "left";
         ctx.fillText(`SCORE: ${this.score}`, 10, 20);
+        ctx.fillText(`SONG: ${MOONLIGHT_SONATA_INFO.title}`, 10, 40);
 
         ctx.textAlign = "right";
         ctx.fillText(`LIVES: ${this.lives}`, W - 10, 20);
+        ctx.fillText(`${this.songHasStarted ? "SONG SYNC" : "FREE MODE"}`, W - 10, 40);
 
         // Draw Cart
         ctx.strokeStyle = "#ffaa00";
@@ -313,11 +436,11 @@ class EggApp implements AppInstance {
         const cy = (this.logicalH - 40) * s;
         const cw = CART_WIDTH * s;
         const ch = CART_HEIGHT * s;
-        
-        ctx.moveTo(cx - cw/2, cy);
-        ctx.lineTo(cx - cw/2 + 8*s, cy + ch);
-        ctx.lineTo(cx + cw/2 - 8*s, cy + ch);
-        ctx.lineTo(cx + cw/2, cy);
+
+        ctx.moveTo(cx - cw / 2, cy);
+        ctx.lineTo(cx - cw / 2 + 8 * s, cy + ch);
+        ctx.lineTo(cx + cw / 2 - 8 * s, cy + ch);
+        ctx.lineTo(cx + cw / 2, cy);
         ctx.stroke();
 
         // Draw Eggs
@@ -338,8 +461,8 @@ class EggApp implements AppInstance {
             ctx.beginPath();
             const sx = sh.x * s;
             const sy = sh.y * s;
-            ctx.moveTo(sx - 15*s, sy - 15*s); ctx.lineTo(sx + 15*s, sy + 15*s);
-            ctx.moveTo(sx + 15*s, sy - 15*s); ctx.lineTo(sx - 15*s, sy + 15*s);
+            ctx.moveTo(sx - 15 * s, sy - 15 * s); ctx.lineTo(sx + 15 * s, sy + 15 * s);
+            ctx.moveTo(sx + 15 * s, sy - 15 * s); ctx.lineTo(sx - 15 * s, sy + 15 * s);
             ctx.stroke();
         }
 
@@ -349,7 +472,7 @@ class EggApp implements AppInstance {
         for (const c of this.catches) {
             const alpha = Math.max(0, c.timer / 0.4);
             ctx.fillStyle = `rgba(51, 255, 102, ${alpha})`;
-            
+
             // Float up slowly
             const yOffset = (1.0 - (c.timer / 0.4)) * 40 * s;
             ctx.fillText("+1", c.x * s, c.y * s - yOffset);
@@ -359,19 +482,19 @@ class EggApp implements AppInstance {
         if (this.state === "GAMEOVER") {
             ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
             ctx.fillRect(0, 0, W, H);
-            
+
             ctx.fillStyle = "#ff3333";
             ctx.textAlign = "center";
             ctx.font = "2rem var(--font-mono)";
-            ctx.fillText("SYSTEM HALT", W/2, H/2 - 20);
-            
+            ctx.fillText("SYSTEM HALT", W / 2, H / 2 - 20);
+
             ctx.fillStyle = "#33ff66";
             ctx.font = "1rem var(--font-mono)";
-            ctx.fillText(`FINAL SCORE: ${this.score}`, W/2, H/2 + 20);
-            
+            ctx.fillText(`FINAL SCORE: ${this.score}`, W / 2, H / 2 + 20);
+
             ctx.fillStyle = "#1a9940";
             ctx.font = "0.8rem var(--font-mono)";
-            ctx.fillText("TAP TO REBOOT", W/2, H/2 + 60);
+            ctx.fillText("TAP TO REBOOT", W / 2, H / 2 + 60);
         }
     }
 }
