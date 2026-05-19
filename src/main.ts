@@ -4,7 +4,7 @@ import {
     buildOpenSequence,
     buildExitSequence,
 } from "./animations.js";
-import type { App } from "./apps_api/types.js";
+import type { AppDefinition, AppInstance } from "./apps_api/types.js";
 import { AppFolder } from "./apps_api/types.js";
 import { apps } from "./apps/registry.js";
 
@@ -17,7 +17,8 @@ if (!root) {
 
 const state = {
     activeAppId: "",
-    activeApp: null as App | null,
+    activeAppDef: null as AppDefinition | null,
+    activeAppInstance: null as AppInstance | null,
     activeFolder: AppFolder.MISSION,
 };
 
@@ -129,12 +130,12 @@ function renderHomeScreen(): HTMLElement {
 
 // ── App View ───────────────────────────────────────
 
-function renderAppView(appModule: App): HTMLElement {
+function renderAppView(appDef: AppDefinition, appInstance: AppInstance): HTMLElement {
     const panel = createElement("div", "app-panel");
 
     // Framework-controlled header (title + exit button)
     const header = createElement("div", "panel-header");
-    const title = createElement("h1", undefined, appModule.manifest.title);
+    const title = createElement("h1", undefined, appDef.manifest.title);
     const backButton = createElement("button", "back-button", "EXIT");
     backButton.type = "button";
     backButton.addEventListener("click", () => exitApp());
@@ -147,7 +148,7 @@ function renderAppView(appModule: App): HTMLElement {
     panel.appendChild(container);
 
     // Mount the app
-    appModule.onMount({ container });
+    appInstance.onMount({ container });
 
     return panel;
 }
@@ -158,27 +159,27 @@ function getScreen(): HTMLElement | null {
     return root.querySelector(".screen");
 }
 
-function findApp(appId: string): App | undefined {
+function findApp(appId: string): AppDefinition | undefined {
     return apps.find((a) => a.manifest.id === appId);
 }
 
 function openApp(appId: string): void {
     if (isTransitioning()) return;
 
-    const appModule = findApp(appId);
-    if (!appModule) return;
+    const appDef = findApp(appId);
+    if (!appDef) return;
 
     const screen = getScreen();
     const promptEl = root.querySelector(".cmd-prompt") as HTMLElement | null;
     if (!screen || !promptEl) {
         // Fallback: render immediately if DOM isn't ready
-        mountApp(appModule);
+        mountApp(appDef);
         render();
         return;
     }
 
-    const steps = buildOpenSequence(screen, promptEl, appModule.manifest.command, () => {
-        mountApp(appModule);
+    const steps = buildOpenSequence(screen, promptEl, appDef.manifest.command, () => {
+        mountApp(appDef);
         renderContent(screen);
     });
 
@@ -204,18 +205,20 @@ function exitApp(): void {
 }
 
 /** Set the active app and track it for unmount. */
-function mountApp(appModule: App): void {
-    state.activeAppId = appModule.manifest.id;
-    state.activeApp = appModule;
+function mountApp(appDef: AppDefinition): void {
+    state.activeAppId = appDef.manifest.id;
+    state.activeAppDef = appDef;
+    state.activeAppInstance = appDef.create();
 }
 
 /** Unmount the current app and clear active state. */
 function unmountApp(): void {
-    if (state.activeApp) {
-        state.activeApp.onUnmount?.();
+    if (state.activeAppInstance) {
+        state.activeAppInstance.onUnmount?.();
     }
     state.activeAppId = "";
-    state.activeApp = null;
+    state.activeAppDef = null;
+    state.activeAppInstance = null;
 }
 
 /**
@@ -235,16 +238,16 @@ function renderContent(screen: HTMLElement): void {
         }
     }
 
-    const appModule = state.activeApp;
-    const content = appModule ? renderAppView(appModule) : renderHomeScreen();
+    const appDef = state.activeAppDef;
+    const content = appDef && state.activeAppInstance ? renderAppView(appDef, state.activeAppInstance) : renderHomeScreen();
     screen.appendChild(content);
 }
 
 /** Full render — rebuilds the entire shell. Used for initial load. */
 function render(): void {
     root.innerHTML = "";
-    const appModule = state.activeApp;
-    const content = appModule ? renderAppView(appModule) : renderHomeScreen();
+    const appDef = state.activeAppDef;
+    const content = appDef && state.activeAppInstance ? renderAppView(appDef, state.activeAppInstance) : renderHomeScreen();
     root.appendChild(createPhoneShell(content));
 }
 

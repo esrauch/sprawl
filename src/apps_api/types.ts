@@ -31,11 +31,8 @@ export interface AppApi {
     container: HTMLElement;
 }
 
-/** The contract every app module must fulfill. */
-export interface App {
-    /** App metadata for the launcher and framework chrome. */
-    manifest: AppManifest;
-
+/** A running instance of an app. */
+export interface AppInstance {
     /** Called when the app is opened. Populate api.container here. */
     onMount(api: AppApi): void;
 
@@ -44,4 +41,13 @@ export interface App {
      * Optional — not every app needs cleanup.
      */
     onUnmount?(): void;
+}
+
+/** The static definition provided to the launcher registry. */
+export interface AppDefinition {
+    /** Static metadata for the launcher. */
+    manifest: AppManifest;
+    
+    /** Factory method that instantiates a fresh copy of the app */
+    create(): AppInstance;
 }

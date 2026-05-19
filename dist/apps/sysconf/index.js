@@ -1,13 +1,5 @@
 import { AppFolder } from "../../apps_api/types.js";
-const sysconf = {
-    manifest: {
-        id: "sysconf",
-        title: "SYSCONF",
-        command: "SYSCONF.BIN",
-        icon: "⌬",
-        description: "Terminal configuration. Kernel parameters. Access level management.",
-        folder: AppFolder.SYSTEM,
-    },
+class SysconfApp {
     onMount(api) {
         const container = api.container;
         const card = document.createElement("div");
@@ -20,6 +12,17 @@ const sysconf = {
         card.appendChild(subtitle);
         card.appendChild(description);
         container.appendChild(card);
+    }
+}
+const sysconf = {
+    manifest: {
+        id: "sysconf",
+        title: "SYSCONF",
+        command: "SYSCONF.BIN",
+        icon: "⌬",
+        description: "Terminal configuration. Kernel parameters. Access level management.",
+        folder: AppFolder.SYSTEM,
     },
+    create: () => new SysconfApp(),
 };
 export default sysconf;

@@ -1,26 +1,13 @@
-import type { App, AppApi } from "../../apps_api/types.js";
+import type { AppDefinition, AppInstance, AppApi } from "../../apps_api/types.js";
 import { AppFolder } from "../../apps_api/types.js";
 
-// ── Local State ────────────────────────────────────
+class PixscanApp implements AppInstance {
+    private cells: HTMLDivElement[] = [];
+    private animationTimer: number | undefined;
 
-let cells: HTMLDivElement[] = [];
-let animationTimer: number | undefined;
-
-// ── Module ─────────────────────────────────────────
-
-const pixscan: App = {
-    manifest: {
-        id: "pixscan",
-        title: "PIXSCAN",
-        command: "PIXSCAN.BIN",
-        icon: "▦",
-        description: "Execute pattern recognition module. Monitor pixel grid output.",
-        folder: AppFolder.GAMES,
-    },
-
-    onMount(api: AppApi) {
+    public onMount(api: AppApi) {
         const container = api.container;
-        cells = [];
+        this.cells = [];
 
         // Description card
         const card = document.createElement("div");
@@ -40,7 +27,7 @@ const pixscan: App = {
         for (let i = 0; i < 64; i += 1) {
             const cell = document.createElement("div");
             cell.className = "pixel-cell";
-            cells.push(cell);
+            this.cells.push(cell);
             pixelDisplay.appendChild(cell);
         }
         container.appendChild(pixelDisplay);
@@ -50,39 +37,49 @@ const pixscan: App = {
         startButton.className = "button";
         startButton.type = "button";
         startButton.textContent = "EXECUTE";
-        startButton.addEventListener("click", runPattern);
+        startButton.addEventListener("click", this.runPattern);
         container.appendChild(startButton);
-    },
-
-    onUnmount() {
-        if (animationTimer !== undefined) {
-            clearInterval(animationTimer);
-            animationTimer = undefined;
-        }
-        cells = [];
-    },
-};
-
-// ── Internal Logic ─────────────────────────────────
-
-function runPattern(): void {
-    const pattern = generatePattern();
-    cells.forEach((cell, index) => {
-        cell.classList.toggle("on", pattern[index]);
-    });
-}
-
-function generatePattern(): boolean[] {
-    const pattern: boolean[] = [];
-    for (let i = 0; i < 64; i += 1) {
-        const x = i % 8;
-        const y = Math.floor(i / 8);
-        const wave =
-            Math.sin((x + performance.now() / 80) * 1.2) +
-            Math.cos((y + performance.now() / 120) * 1.8);
-        pattern.push(wave > 0.4);
     }
-    return pattern;
+
+    public onUnmount() {
+        if (this.animationTimer !== undefined) {
+            clearInterval(this.animationTimer);
+            this.animationTimer = undefined;
+        }
+        this.cells = [];
+    }
+
+    private runPattern = (): void => {
+        const pattern = this.generatePattern();
+        this.cells.forEach((cell, index) => {
+            cell.classList.toggle("on", pattern[index]);
+        });
+    };
+
+    private generatePattern = (): boolean[] => {
+        const pattern: boolean[] = [];
+        for (let i = 0; i < 64; i += 1) {
+            const x = i % 8;
+            const y = Math.floor(i / 8);
+            const wave =
+                Math.sin((x + performance.now() / 80) * 1.2) +
+                Math.cos((y + performance.now() / 120) * 1.8);
+            pattern.push(wave > 0.4);
+        }
+        return pattern;
+    };
 }
+
+const pixscan: AppDefinition = {
+    manifest: {
+        id: "pixscan",
+        title: "PIXSCAN",
+        command: "PIXSCAN.BIN",
+        icon: "▦",
+        description: "Execute pattern recognition module. Monitor pixel grid output.",
+        folder: AppFolder.GAMES,
+    },
+    create: () => new PixscanApp()
+};
 
 export default pixscan;

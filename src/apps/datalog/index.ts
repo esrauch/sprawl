@@ -1,16 +1,7 @@
-import type { App, AppApi } from "../../apps_api/types.js";
+import type { AppDefinition, AppInstance, AppApi } from "../../apps_api/types.js";
 import { AppFolder } from "../../apps_api/types.js";
 
-const datalog: App = {
-    manifest: {
-        id: "datalog",
-        title: "DATALOG",
-        command: "DATALOG.BIN",
-        icon: "▤",
-        description: "Access crew manifest and mission documentation interface.",
-        folder: AppFolder.MISSION,
-    },
-
+class DatalogApp implements AppInstance {
     onMount(api: AppApi) {
         const container = api.container;
 
@@ -24,7 +15,19 @@ const datalog: App = {
         card.appendChild(subtitle);
         card.appendChild(description);
         container.appendChild(card);
+    }
+}
+
+const datalog: AppDefinition = {
+    manifest: {
+        id: "datalog",
+        title: "DATALOG",
+        command: "DATALOG.BIN",
+        icon: "▤",
+        description: "Access crew manifest and mission documentation interface.",
+        folder: AppFolder.MISSION,
     },
+    create: () => new DatalogApp()
 };
 
 export default datalog;
