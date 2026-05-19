@@ -4,46 +4,9 @@ import {
     buildOpenSequence,
     buildExitSequence,
 } from "./animations.js";
-
-// ── Types ──────────────────────────────────────────
-
-type AppDefinition = {
-    id: string;
-    title: string;
-    description: string;
-    icon: string;
-    command: string;
-    render: () => HTMLElement;
-};
-
-// ── App Registry ───────────────────────────────────
-
-const apps: AppDefinition[] = [
-    {
-        id: "retro",
-        title: "PIXSCAN",
-        description: "Execute pattern recognition module. Monitor pixel grid output.",
-        icon: "▦",
-        command: "PIXSCAN.BIN",
-        render: renderRetroGame,
-    },
-    {
-        id: "notes",
-        title: "DATALOG",
-        description: "Access crew manifest and mission documentation interface.",
-        icon: "▤",
-        command: "DATALOG.BIN",
-        render: renderNotesApp,
-    },
-    {
-        id: "settings",
-        title: "SYSCONF",
-        description: "Terminal configuration. Kernel parameters. Access level management.",
-        icon: "⌬",
-        command: "SYSCONF.BIN",
-        render: renderSettingsApp,
-    },
-];
+import type { App } from "./apps_api/types.js";
+import { AppFolder } from "./apps_api/types.js";
+import { apps } from "./apps/registry.js";
 
 // ── State ──────────────────────────────────────────
 
@@ -54,6 +17,8 @@ if (!root) {
 
 const state = {
     activeAppId: "",
+    activeApp: null as App | null,
+    activeFolder: AppFolder.MISSION,
 };
 
 // ── Helpers ────────────────────────────────────────
@@ -112,32 +77,64 @@ function renderHomeScreen(): HTMLElement {
 
     panel.appendChild(topSection);
 
+    /* ── MIDDLE SECTION: Folders ── */
+    const middleSection = createElement("div", "folder-bar");
+    
     /* ── BOTTOM SECTION: app grid ── */
     const bottomSection = createElement("div", "home-section home-section--bottom");
     const grid = createElement("div", "app-grid");
-    apps.forEach((app) => {
-        const button = createElement("button", "app-icon");
-        button.type = "button";
-        button.addEventListener("click", () => openApp(app.id));
-
-        const icon = createElement("div", "icon-sprite", app.icon);
-        const label = createElement("span", "icon-label", app.title);
-        button.appendChild(icon);
-        button.appendChild(label);
-        grid.appendChild(button);
-    });
     bottomSection.appendChild(grid);
+
+    function renderGrid() {
+        grid.innerHTML = "";
+        const folderApps = apps.filter((app) => app.manifest.folder === state.activeFolder);
+        folderApps.forEach((appModule) => {
+            const m = appModule.manifest;
+            const button = createElement("button", "app-icon");
+            button.type = "button";
+            button.addEventListener("click", () => openApp(m.id));
+
+            const icon = createElement("div", "icon-sprite", m.icon);
+            const label = createElement("span", "icon-label", m.title);
+            button.appendChild(icon);
+            button.appendChild(label);
+            grid.appendChild(button);
+        });
+    }
+
+    const folderButtons: HTMLButtonElement[] = [];
+    Object.values(AppFolder).forEach((folder) => {
+        const folderBtn = createElement("button", "folder-button");
+        if (state.activeFolder === folder) folderBtn.classList.add("active");
+        folderBtn.textContent = `[ ${folder} ]`;
+        folderBtn.type = "button";
+        folderBtn.addEventListener("click", () => {
+            state.activeFolder = folder as AppFolder;
+            folderButtons.forEach(btn => btn.classList.remove("active"));
+            folderBtn.classList.add("active");
+            renderGrid();
+        });
+        folderButtons.push(folderBtn as HTMLButtonElement);
+        middleSection.appendChild(folderBtn);
+    });
+
+    panel.appendChild(middleSection);
     panel.appendChild(bottomSection);
+
+    // Initial render
+    renderGrid();
 
     return panel;
 }
 
 // ── App View ───────────────────────────────────────
 
-function renderAppView(app: AppDefinition): HTMLElement {
+function renderAppView(appModule: App): HTMLElement {
     const panel = createElement("div", "app-panel");
+
+    // Framework-controlled header (title + exit button)
     const header = createElement("div", "panel-header");
-    const title = createElement("h1", undefined, app.title);
+    const title = createElement("h1", undefined, appModule.manifest.title);
     const backButton = createElement("button", "back-button", "EXIT");
     backButton.type = "button";
     backButton.addEventListener("click", () => exitApp());
@@ -145,91 +142,14 @@ function renderAppView(app: AppDefinition): HTMLElement {
     header.appendChild(backButton);
     panel.appendChild(header);
 
-    panel.appendChild(app.render());
+    // App-owned container
+    const container = createElement("div", "panel-content");
+    panel.appendChild(container);
+
+    // Mount the app
+    appModule.onMount({ container });
+
     return panel;
-}
-
-// ── App Content Renderers ──────────────────────────
-
-function renderRetroGame(): HTMLElement {
-    const container = createElement("div", "panel-content");
-    const messageCard = createElement("div", "panel-card");
-    const subtitle = createElement("h2", undefined, "PATTERN SCAN");
-    const description = createElement(
-        "p",
-        undefined,
-        "EXEC pattern recognition subroutine. Grid output will render to display buffer."
-    );
-    messageCard.appendChild(subtitle);
-    messageCard.appendChild(description);
-
-    const pixelDisplay = createElement("div", "pixel-display");
-    const cells: HTMLDivElement[] = [];
-    for (let i = 0; i < 64; i += 1) {
-        const cell = createElement("div", "pixel-cell") as HTMLDivElement;
-        cells.push(cell);
-        pixelDisplay.appendChild(cell);
-    }
-
-    const startButton = createElement("button", "button", "EXECUTE");
-    startButton.type = "button";
-    startButton.addEventListener("click", () => animatePixels(cells));
-
-    container.appendChild(messageCard);
-    container.appendChild(pixelDisplay);
-    container.appendChild(startButton);
-    return container;
-}
-
-function renderNotesApp(): HTMLElement {
-    const container = createElement("div", "panel-content");
-    const card = createElement("div", "panel-card");
-    const subtitle = createElement("h2", undefined, "CREW LOG");
-    const description = createElement(
-        "p",
-        undefined,
-        "No entries found. Awaiting crew input. Data will be stored to local partition."
-    );
-    card.appendChild(subtitle);
-    card.appendChild(description);
-    container.appendChild(card);
-    return container;
-}
-
-function renderSettingsApp(): HTMLElement {
-    const container = createElement("div", "panel-content");
-    const card = createElement("div", "panel-card");
-    const subtitle = createElement("h2", undefined, "SYSTEM CONFIG");
-    const description = createElement(
-        "p",
-        undefined,
-        "Terminal mode: PORTRAIT. Render pipeline: ACTIVE. Access level: CREW. Kernel v2.4.1-stable."
-    );
-    card.appendChild(subtitle);
-    card.appendChild(description);
-    container.appendChild(card);
-    return container;
-}
-
-// ── Pixel Game Logic ───────────────────────────────
-
-function animatePixels(cells: HTMLDivElement[]): void {
-    const pattern = generatePattern();
-    cells.forEach((cell, index) => {
-        const on = pattern[index];
-        cell.classList.toggle("on", on);
-    });
-}
-
-function generatePattern(): boolean[] {
-    const pattern: boolean[] = [];
-    for (let i = 0; i < 64; i += 1) {
-        const x = i % 8;
-        const y = Math.floor(i / 8);
-        const wave = Math.sin((x + performance.now() / 80) * 1.2) + Math.cos((y + performance.now() / 120) * 1.8);
-        pattern.push(wave > 0.4);
-    }
-    return pattern;
 }
 
 // ── Navigation with Transitions ────────────────────
@@ -238,23 +158,27 @@ function getScreen(): HTMLElement | null {
     return root.querySelector(".screen");
 }
 
+function findApp(appId: string): App | undefined {
+    return apps.find((a) => a.manifest.id === appId);
+}
+
 function openApp(appId: string): void {
     if (isTransitioning()) return;
 
-    const app = apps.find((a) => a.id === appId);
-    if (!app) return;
+    const appModule = findApp(appId);
+    if (!appModule) return;
 
     const screen = getScreen();
     const promptEl = root.querySelector(".cmd-prompt") as HTMLElement | null;
     if (!screen || !promptEl) {
         // Fallback: render immediately if DOM isn't ready
-        state.activeAppId = appId;
+        mountApp(appModule);
         render();
         return;
     }
 
-    const steps = buildOpenSequence(screen, promptEl, app.command, () => {
-        state.activeAppId = appId;
+    const steps = buildOpenSequence(screen, promptEl, appModule.manifest.command, () => {
+        mountApp(appModule);
         renderContent(screen);
     });
 
@@ -266,17 +190,32 @@ function exitApp(): void {
 
     const screen = getScreen();
     if (!screen) {
-        state.activeAppId = "";
+        unmountApp();
         render();
         return;
     }
 
     const steps = buildExitSequence(screen, () => {
-        state.activeAppId = "";
+        unmountApp();
         renderContent(screen);
     });
 
     void runSequence(steps);
+}
+
+/** Set the active app and track it for unmount. */
+function mountApp(appModule: App): void {
+    state.activeAppId = appModule.manifest.id;
+    state.activeApp = appModule;
+}
+
+/** Unmount the current app and clear active state. */
+function unmountApp(): void {
+    if (state.activeApp) {
+        state.activeApp.onUnmount?.();
+    }
+    state.activeAppId = "";
+    state.activeApp = null;
 }
 
 /**
@@ -296,16 +235,16 @@ function renderContent(screen: HTMLElement): void {
         }
     }
 
-    const currentApp = apps.find((a) => a.id === state.activeAppId);
-    const content = currentApp ? renderAppView(currentApp) : renderHomeScreen();
+    const appModule = state.activeApp;
+    const content = appModule ? renderAppView(appModule) : renderHomeScreen();
     screen.appendChild(content);
 }
 
 /** Full render — rebuilds the entire shell. Used for initial load. */
 function render(): void {
     root.innerHTML = "";
-    const currentApp = apps.find((app) => app.id === state.activeAppId);
-    const content = currentApp ? renderAppView(currentApp) : renderHomeScreen();
+    const appModule = state.activeApp;
+    const content = appModule ? renderAppView(appModule) : renderHomeScreen();
     root.appendChild(createPhoneShell(content));
 }
 
