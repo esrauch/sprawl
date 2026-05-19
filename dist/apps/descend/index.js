@@ -5,7 +5,7 @@ const GRAVITY = 25.0;
 const JUMP_VEL = -12.0;
 const MOVE_SPEED = 8.0;
 const HOVER_IMPULSE = -5.0;
-const MAX_FALL_SPEED = 20.0;
+const MAX_FALL_SPEED = 12.0;
 const MAX_AMMO = 8;
 const BLOCK_TYPES = {
     EMPTY: 0,
