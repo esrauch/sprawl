@@ -1,34 +1,51 @@
+import {
+    isTransitioning,
+    runSequence,
+    buildOpenSequence,
+    buildExitSequence,
+} from "./animations.js";
+
+// ── Types ──────────────────────────────────────────
+
 type AppDefinition = {
     id: string;
     title: string;
     description: string;
     icon: string;
+    command: string;
     render: () => HTMLElement;
 };
+
+// ── App Registry ───────────────────────────────────
 
 const apps: AppDefinition[] = [
     {
         id: "retro",
-        title: "Retro Game",
-        description: "A tiny pixel challenge with a single button.",
-        icon: "⧉",
+        title: "PIXSCAN",
+        description: "Execute pattern recognition module. Monitor pixel grid output.",
+        icon: "▦",
+        command: "PIXSCAN.BIN",
         render: renderRetroGame,
     },
     {
         id: "notes",
-        title: "Notes",
-        description: "A blank notepad for later world-building.",
-        icon: "✎",
+        title: "DATALOG",
+        description: "Access crew manifest and mission documentation interface.",
+        icon: "▤",
+        command: "DATALOG.BIN",
         render: renderNotesApp,
     },
     {
         id: "settings",
-        title: "Settings",
-        description: "Phone config and theme hints.",
-        icon: "⚙",
+        title: "SYSCONF",
+        description: "Terminal configuration. Kernel parameters. Access level management.",
+        icon: "⌬",
+        command: "SYSCONF.BIN",
         render: renderSettingsApp,
     },
 ];
+
+// ── State ──────────────────────────────────────────
 
 const root = document.getElementById("app") as HTMLElement;
 if (!root) {
@@ -39,12 +56,24 @@ const state = {
     activeAppId: "",
 };
 
+// ── Helpers ────────────────────────────────────────
+
 function createElement<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
     const element = document.createElement(tag);
     if (className) element.className = className;
     if (text) element.textContent = text;
     return element;
 }
+
+function formatSystemTime(): string {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, "0");
+    const m = String(now.getMinutes()).padStart(2, "0");
+    const s = String(now.getSeconds()).padStart(2, "0");
+    return `${h}:${m}:${s}`;
+}
+
+// ── Shell & Status Bar ─────────────────────────────
 
 function createPhoneShell(content: HTMLElement): HTMLElement {
     const shell = createElement("div", "phone-shell");
@@ -57,17 +86,34 @@ function createPhoneShell(content: HTMLElement): HTMLElement {
 
 function createStatusBar(): HTMLElement {
     const status = createElement("div", "status-bar");
-    status.textContent = "09:20";
+    status.textContent = formatSystemTime();
+    setInterval(() => {
+        status.textContent = formatSystemTime();
+    }, 1000);
     return status;
 }
 
+// ── Home Screen ────────────────────────────────────
+
 function renderHomeScreen(): HTMLElement {
     const panel = createElement("div", "home-panel");
-    const header = createElement("div", "panel-header");
-    const title = createElement("h1", "home-title", "Home");
-    header.appendChild(title);
-    panel.appendChild(header);
 
+    /* ── TOP SECTION: terminal header ── */
+    const topSection = createElement("div", "home-section home-section--top");
+    const title = createElement("h1", "home-title", "MAIN TERMINAL");
+    topSection.appendChild(title);
+
+    const prompt = createElement("div", "cmd-prompt");
+    const promptText = createElement("span", "cmd-prompt__text", "CMD$ >");
+    const cursor = createElement("span", "cmd-prompt__cursor", "\u2588");
+    prompt.appendChild(promptText);
+    prompt.appendChild(cursor);
+    topSection.appendChild(prompt);
+
+    panel.appendChild(topSection);
+
+    /* ── BOTTOM SECTION: app grid ── */
+    const bottomSection = createElement("div", "home-section home-section--bottom");
     const grid = createElement("div", "app-grid");
     apps.forEach((app) => {
         const button = createElement("button", "app-icon");
@@ -75,28 +121,26 @@ function renderHomeScreen(): HTMLElement {
         button.addEventListener("click", () => openApp(app.id));
 
         const icon = createElement("div", "icon-sprite", app.icon);
-        const label = createElement("strong", undefined, app.title);
-        const note = createElement("span", undefined, app.description);
+        const label = createElement("span", "icon-label", app.title);
         button.appendChild(icon);
         button.appendChild(label);
-        button.appendChild(note);
         grid.appendChild(button);
     });
+    bottomSection.appendChild(grid);
+    panel.appendChild(bottomSection);
 
-    panel.appendChild(grid);
     return panel;
 }
+
+// ── App View ───────────────────────────────────────
 
 function renderAppView(app: AppDefinition): HTMLElement {
     const panel = createElement("div", "app-panel");
     const header = createElement("div", "panel-header");
     const title = createElement("h1", undefined, app.title);
-    const backButton = createElement("button", "back-button", "Back");
+    const backButton = createElement("button", "back-button", "EXIT");
     backButton.type = "button";
-    backButton.addEventListener("click", () => {
-        state.activeAppId = "";
-        render();
-    });
+    backButton.addEventListener("click", () => exitApp());
     header.appendChild(title);
     header.appendChild(backButton);
     panel.appendChild(header);
@@ -105,14 +149,16 @@ function renderAppView(app: AppDefinition): HTMLElement {
     return panel;
 }
 
+// ── App Content Renderers ──────────────────────────
+
 function renderRetroGame(): HTMLElement {
     const container = createElement("div", "panel-content");
     const messageCard = createElement("div", "panel-card");
-    const subtitle = createElement("h2", undefined, "Pixel Quest");
+    const subtitle = createElement("h2", undefined, "PATTERN SCAN");
     const description = createElement(
         "p",
         undefined,
-        "Press START to light up the board and watch the pixels animate. It0s the first demo game for the home screen."
+        "EXEC pattern recognition subroutine. Grid output will render to display buffer."
     );
     messageCard.appendChild(subtitle);
     messageCard.appendChild(description);
@@ -125,7 +171,7 @@ function renderRetroGame(): HTMLElement {
         pixelDisplay.appendChild(cell);
     }
 
-    const startButton = createElement("button", "button", "START");
+    const startButton = createElement("button", "button", "EXECUTE");
     startButton.type = "button";
     startButton.addEventListener("click", () => animatePixels(cells));
 
@@ -138,11 +184,11 @@ function renderRetroGame(): HTMLElement {
 function renderNotesApp(): HTMLElement {
     const container = createElement("div", "panel-content");
     const card = createElement("div", "panel-card");
-    const subtitle = createElement("h2", undefined, "Draft Space");
+    const subtitle = createElement("h2", undefined, "CREW LOG");
     const description = createElement(
         "p",
         undefined,
-        "This notepad is waiting for future game design notes, item ideas, and mission plans."
+        "No entries found. Awaiting crew input. Data will be stored to local partition."
     );
     card.appendChild(subtitle);
     card.appendChild(description);
@@ -153,17 +199,19 @@ function renderNotesApp(): HTMLElement {
 function renderSettingsApp(): HTMLElement {
     const container = createElement("div", "panel-content");
     const card = createElement("div", "panel-card");
-    const subtitle = createElement("h2", undefined, "Phone Mode");
+    const subtitle = createElement("h2", undefined, "SYSTEM CONFIG");
     const description = createElement(
         "p",
         undefined,
-        "Portrait-only UI with retro styling. App icons launch placeholders now, real apps later."
+        "Terminal mode: PORTRAIT. Render pipeline: ACTIVE. Access level: CREW. Kernel v2.4.1-stable."
     );
     card.appendChild(subtitle);
     card.appendChild(description);
     container.appendChild(card);
     return container;
 }
+
+// ── Pixel Game Logic ───────────────────────────────
 
 function animatePixels(cells: HTMLDivElement[]): void {
     const pattern = generatePattern();
@@ -184,16 +232,83 @@ function generatePattern(): boolean[] {
     return pattern;
 }
 
-function openApp(appId: string): void {
-    state.activeAppId = appId;
-    render();
+// ── Navigation with Transitions ────────────────────
+
+function getScreen(): HTMLElement | null {
+    return root.querySelector(".screen");
 }
 
+function openApp(appId: string): void {
+    if (isTransitioning()) return;
+
+    const app = apps.find((a) => a.id === appId);
+    if (!app) return;
+
+    const screen = getScreen();
+    const promptEl = root.querySelector(".cmd-prompt") as HTMLElement | null;
+    if (!screen || !promptEl) {
+        // Fallback: render immediately if DOM isn't ready
+        state.activeAppId = appId;
+        render();
+        return;
+    }
+
+    const steps = buildOpenSequence(screen, promptEl, app.command, () => {
+        state.activeAppId = appId;
+        renderContent(screen);
+    });
+
+    void runSequence(steps);
+}
+
+function exitApp(): void {
+    if (isTransitioning()) return;
+
+    const screen = getScreen();
+    if (!screen) {
+        state.activeAppId = "";
+        render();
+        return;
+    }
+
+    const steps = buildExitSequence(screen, () => {
+        state.activeAppId = "";
+        renderContent(screen);
+    });
+
+    void runSequence(steps);
+}
+
+/**
+ * Replace the content inside an existing screen element,
+ * preserving the status bar and shell.
+ */
+function renderContent(screen: HTMLElement): void {
+    // Remove everything except the status bar and transition overlays
+    const children = Array.from(screen.children);
+    for (const child of children) {
+        if (
+            !child.classList.contains("status-bar") &&
+            !child.classList.contains("transition-wipe") &&
+            !child.classList.contains("transition-blackout")
+        ) {
+            child.remove();
+        }
+    }
+
+    const currentApp = apps.find((a) => a.id === state.activeAppId);
+    const content = currentApp ? renderAppView(currentApp) : renderHomeScreen();
+    screen.appendChild(content);
+}
+
+/** Full render — rebuilds the entire shell. Used for initial load. */
 function render(): void {
     root.innerHTML = "";
     const currentApp = apps.find((app) => app.id === state.activeAppId);
     const content = currentApp ? renderAppView(currentApp) : renderHomeScreen();
     root.appendChild(createPhoneShell(content));
 }
+
+// ── Init ───────────────────────────────────────────
 
 render();
