@@ -10,7 +10,7 @@ class SysconfApp {
         settingsSection.style.flexDirection = "column";
         settingsSection.style.gap = "1rem";
         const sectionTitle = document.createElement("h3");
-        sectionTitle.textContent = "HARDWARE PARAMETERS";
+        sectionTitle.textContent = "EXPERIENCE OPTS";
         sectionTitle.style.borderBottom = "1px solid var(--crt-border)";
         sectionTitle.style.paddingBottom = "0.3rem";
         sectionTitle.style.marginBottom = "0.5rem";
@@ -28,7 +28,7 @@ class SysconfApp {
         const box = document.createElement("span");
         box.className = "retro-checkbox-box";
         const text = document.createElement("span");
-        text.textContent = "GLOBAL EMULATION ANIMATIONS";
+        text.textContent = "GLOBAL ANIMATIONS";
         text.style.fontSize = "0.85rem";
         text.style.letterSpacing = "0.08em";
         label.appendChild(input);

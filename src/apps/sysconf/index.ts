@@ -14,7 +14,7 @@ class SysconfApp implements AppInstance {
         settingsSection.style.gap = "1rem";
 
         const sectionTitle = document.createElement("h3");
-        sectionTitle.textContent = "HARDWARE PARAMETERS";
+        sectionTitle.textContent = "EXPERIENCE OPTS";
         sectionTitle.style.borderBottom = "1px solid var(--crt-border)";
         sectionTitle.style.paddingBottom = "0.3rem";
         sectionTitle.style.marginBottom = "0.5rem";
@@ -29,7 +29,7 @@ class SysconfApp implements AppInstance {
         const input = document.createElement("input");
         input.type = "checkbox";
         input.id = "animations-toggle";
-        
+
         const isAnimEnabled = localStorage.getItem("sprawl_animations") !== "false";
         input.checked = isAnimEnabled;
 
@@ -37,7 +37,7 @@ class SysconfApp implements AppInstance {
         box.className = "retro-checkbox-box";
 
         const text = document.createElement("span");
-        text.textContent = "GLOBAL EMULATION ANIMATIONS";
+        text.textContent = "GLOBAL ANIMATIONS";
         text.style.fontSize = "0.85rem";
         text.style.letterSpacing = "0.08em";
 
@@ -45,7 +45,7 @@ class SysconfApp implements AppInstance {
         label.appendChild(box);
         label.appendChild(text);
         settingsSection.appendChild(label);
-        
+
         container.appendChild(settingsSection);
 
         // Event listener
