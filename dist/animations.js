@@ -175,9 +175,9 @@ export function buildOpenSequence(screen, promptEl, command, onRender) {
         wait(350),
         printLine(topSection, "."),
         wait(350),
-        updateLastLineText(topSection, ".."),
+        printLine(topSection, "."),
         wait(350),
-        updateLastLineText(topSection, "..."),
+        printLine(topSection, "."),
         wait(200),
         // 3. Border wipe down
         expandOverlay(screen, 400),

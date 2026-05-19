@@ -230,9 +230,9 @@ export function buildOpenSequence(
         wait(350),
         printLine(topSection as HTMLElement, "."),
         wait(350),
-        updateLastLineText(topSection as HTMLElement, ".."),
+        printLine(topSection as HTMLElement, "."),
         wait(350),
-        updateLastLineText(topSection as HTMLElement, "..."),
+        printLine(topSection as HTMLElement, "."),
         wait(200),
 
         // 3. Border wipe down
